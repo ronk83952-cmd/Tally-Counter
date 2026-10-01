@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Counter Suite - Mobile Dashboard</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Supabase JS Client v2 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        body {
+            touch-action: manipulation;
+            background-color: #090d16;
+        }
+
+        /* Custom Scrollbars */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Tactile Android Tap Animation */
+        .active-tap {
+            transition: transform 0.08s ease-out, filter 0.08s ease-out;
+        }
+        .active-tap:active {
+            transform: scale(0.96);
+            filter: brightness(1.15);
+        }
+
+        /* Glowing Accent Effects */
+        .glow-blue {
+            box-shadow: 0 0 25px -5px rgba(59, 130, 246, 0.35);
+        }
+        .glow-purple {
+            box-shadow: 0 0 25px -5px rgba(168, 85, 247, 0.35);
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col items-center justify-start overflow-y-auto custom-scrollbar p-3 sm:p-6">
+
+    <div class="w-full max-w-md mx-auto flex flex-col gap-6 pb-16">
+
+        <!-- Top Header & Connection Status -->
+        <header class="flex items-center justify-between bg-slate-900/90 backdrop-blur-xl p-4 rounded-2xl border border-slate-800 shadow-xl">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-900/40">
+                    <i class="fa-solid fa-calculator text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-black text-white tracking-tight leading-none">Counter Suite</h1>
+                    <p class="text-[11px] text-slate-400 font-medium mt-1">Android Mobile Dashboard</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <div id="statusBadge" class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span id="statusText">Supabase Active</span>
+                </div>
+                <button id="btnOpenSettings" class="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 active-tap transition-colors border border-slate-700/60" title="Connection Settings">
+                    <i class="fa-solid fa-sliders text-sm"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- CARD 1: Tally Counter (Top Card) -->
+        <section class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-2xl flex flex-col gap-4 glow-blue relative overflow-hidden">
+            
+            <!-- Card Header -->
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-3 h-3 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></span>
+                    <h2 class="text-base font-extrabold text-white uppercase tracking-wider">Tally Counter</h2>
+                </div>
+                
+                <!-- Image Controls Button -->
+                <button id="btnTallyImgSettings" class="text-xs bg-slate-800 hover:bg-slate-700 text-blue-400 font-semibold px-2.5 py-1 rounded-lg border border-slate-700/80 active-tap transition-all flex items-center gap-1.5">
+                    <i class="fa-solid fa-image text-[10px]"></i> Image
+                </button>
+            </div>
+
+            <!-- Image Settings Input Drawer (Collapsible) -->
+            <div id="tallyImgDrawer" class="hidden bg-slate-950/80 p-3 rounded-2xl border border-slate-800 flex flex-col gap-2.5 text-xs">
+                <div class="flex items-center justify-between">
+                    <span class="font-bold text-slate-300">Update Tally Image</span>
+                    <button id="btnCloseTallyImgDrawer" class="text-slate-500 hover:text-slate-300"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="flex gap-2">
+                    <input type="text" id="tallyImgUrlInput" placeholder="Paste image URL here..." class="flex-grow bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
+                    <button id="btnApplyTallyImgUrl" class="bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1.5 rounded-xl active-tap">URL</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-slate-400 font-semibold uppercase">Or upload:</span>
+                    <input type="file" id="tallyImgFileInput" accept="image/*" class="text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-blue-400 hover:file:bg-slate-700 cursor-pointer">
+                </div>
+            </div>
+
+            <!-- Auto-Resizing Adaptive Image Container -->
+            <div class="w-full min-h-[120px] max-h-[220px] bg-slate-950/80 rounded-2xl border border-slate-800/80 p-2 flex items-center justify-center overflow-hidden relative">
+                <img id="tallyCardImage" 
+                     src="https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80" 
+                     alt="Tally Subject" 
+                     class="w-full h-auto max-h-[200px] object-contain rounded-xl transition-all duration-300 shadow-md">
+            </div>
+
+            <!-- Tally Display Number -->
+            <div class="bg-slate-950/90 rounded-2xl p-4 text-center border border-slate-800/90 shadow-inner flex flex-col items-center justify-center">
+                <span class="text-[10px] uppercase font-extrabold tracking-widest text-slate-500 mb-1">Current Tally</span>
+                <span id="tallyDisplay" class="text-6xl font-black text-blue-400 tabular-nums tracking-tight drop-shadow-sm">0</span>
+            </div>
+
+            <!-- Primary Action & Reset Buttons -->
+            <div class="flex flex-col gap-2.5">
+                <button id="btnTallyAdd" class="w-full bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active-tap text-white font-black text-2xl py-5 rounded-2xl shadow-lg shadow-blue-900/50 border border-blue-400/30 tracking-wide flex items-center justify-center gap-3">
+                    <i class="fa-solid fa-plus text-xl"></i>
+                    ADD 1 TALLY
+                </button>
+
+                <!-- Small, discreet, hard-to-click-by-mistake Red Reset Button -->
+                <div class="flex justify-center pt-0.5">
+                    <button id="btnTallyReset" class="bg-red-700/80 hover:bg-red-600 active:scale-90 text-[10px] uppercase tracking-wider font-extrabold text-white px-3.5 py-1 rounded-full border border-red-500/40 opacity-75 hover:opacity-100 transition-all shadow-sm flex items-center gap-1.5" title="Reset Tally Counter">
+                        <i class="fa-solid fa-rotate-right text-[9px]"></i> Reset Counter
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tally Activity Log (Millisecond precision) -->
+            <div class="mt-1 bg-slate-950/80 rounded-2xl p-3.5 border border-slate-800/80">
+                <div class="flex items-center justify-between mb-2.5">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                        <i class="fa-solid fa-clock text-blue-400"></i>
+                        Activity Log <span class="text-[10px] text-slate-500 lowercase">(ms accuracy)</span>
+                    </h3>
+                    
+                    <!-- Clear Log Button: Clears VISIBLE LOG ONLY -->
+                    <button id="btnClearTallyLog" class="text-[10px] font-bold text-slate-400 hover:text-red-400 bg-slate-800 hover:bg-red-950/40 px-2.5 py-1 rounded-lg border border-slate-700/80 transition-colors flex items-center gap-1" title="Clears display log only. Stats remain safe!">
+                        <i class="fa-solid fa-trash-can text-[9px]"></i> Clear Log
+                    </button>
+                </div>
+
+                <div id="tallyLogContainer" class="h-32 overflow-y-auto custom-scrollbar flex flex-col gap-1.5 text-xs font-mono pr-1">
+                    <div class="text-slate-500 text-center py-8 italic text-[11px]">No tally records logged yet</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CARD 2: Infinity Counter (Bottom Card) -->
+        <section class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-2xl flex flex-col gap-4 glow-purple relative overflow-hidden">
+            
+            <!-- Card Header -->
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-3 h-3 rounded-full bg-purple-500 shadow-sm shadow-purple-500/50"></span>
+                    <h2 class="text-base font-extrabold text-white uppercase tracking-wider">Infinity Counter</h2>
+                </div>
+                
+                <!-- Image Controls Button -->
+                <button id="btnInfinityImgSettings" class="text-xs bg-slate-800 hover:bg-slate-700 text-purple-400 font-semibold px-2.5 py-1 rounded-lg border border-slate-700/80 active-tap transition-all flex items-center gap-1.5">
+                    <i class="fa-solid fa-image text-[10px]"></i> Image
+                </button>
+            </div>
+
+            <!-- Image Settings Input Drawer (Collapsible) -->
+            <div id="infinityImgDrawer" class="hidden bg-slate-950/80 p-3 rounded-2xl border border-slate-800 flex flex-col gap-2.5 text-xs">
+                <div class="flex items-center justify-between">
+                    <span class="font-bold text-slate-300">Update Infinity Image</span>
+                    <button id="btnCloseInfinityImgDrawer" class="text-slate-500 hover:text-slate-300"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="flex gap-2">
+                    <input type="text" id="infinityImgUrlInput" placeholder="Paste image URL here..." class="flex-grow bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500">
+                    <button id="btnApplyInfinityImgUrl" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-3 py-1.5 rounded-xl active-tap">URL</button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[10px] text-slate-400 font-semibold uppercase">Or upload:</span>
+                    <input type="file" id="infinityImgFileInput" accept="image/*" class="text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-purple-400 hover:file:bg-slate-700 cursor-pointer">
+                </div>
+            </div>
+
+            <!-- Auto-Resizing Adaptive Image Container -->
+            <div class="w-full min-h-[120px] max-h-[220px] bg-slate-950/80 rounded-2xl border border-slate-800/80 p-2 flex items-center justify-center overflow-hidden relative">
+                <img id="infinityCardImage" 
+                     src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80" 
+                     alt="Infinity Subject" 
+                     class="w-full h-auto max-h-[200px] object-contain rounded-xl transition-all duration-300 shadow-md">
+            </div>
+
+            <!-- Infinity Display Number -->
+            <div class="bg-slate-950/90 rounded-2xl p-4 text-center border border-slate-800/90 shadow-inner flex flex-col items-center justify-center">
+                <span class="text-[10px] uppercase font-extrabold tracking-widest text-slate-500 mb-1">Continuous Infinity Total</span>
+                <span id="infinityDisplay" class="text-6xl font-black text-purple-400 tabular-nums tracking-tight drop-shadow-sm">0</span>
+            </div>
+
+            <!-- Primary Action Button (Long, Wide) -->
+            <button id="btnInfinityAdd" class="w-full bg-gradient-to-r from-purple-600 via-purple-500 to-pink-600 hover:from-purple-500 hover:to-pink-500 active-tap text-white font-black text-2xl py-5 rounded-2xl shadow-lg shadow-purple-900/50 border border-purple-400/30 tracking-wide flex items-center justify-center gap-3">
+                <i class="fa-solid fa-infinity text-2xl"></i>
+                ADD 1 INFINITY
+            </button>
+
+            <!-- Visible log deliberately omitted for Infinity counter -->
+        </section>
+
+        <!-- SECTION 3: Cumulative Statistics Breakdown (Daily & Monthly) -->
+        <section class="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-2xl flex flex-col gap-4">
+            
+            <!-- Header & Tabs -->
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-chart-column text-emerald-400 text-lg"></i>
+                    <h2 class="text-base font-extrabold text-white uppercase tracking-wider">Click Statistics</h2>
+                </div>
+                
+                <!-- View Mode Tabs -->
+                <div class="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <button id="btnTabDaily" class="px-3 py-1 rounded-lg text-xs font-extrabold transition-all bg-emerald-500 text-slate-950 shadow-sm">Daily</button>
+                    <button id="btnTabMonthly" class="px-3 py-1 rounded-lg text-xs font-extrabold text-slate-400 transition-all hover:text-white">Monthly</button>
+                </div>
+            </div>
+
+            <p class="text-[11px] text-slate-400 leading-snug">
+                <i class="fa-solid fa-shield-halved text-emerald-400 mr-1"></i>
+                <span class="font-bold text-slate-300">Persistent Records:</span> Daily & monthly counts accumulate permanently and are unaffected when clearing Tally activity logs.
+            </p>
+
+            <!-- Statistics Table Container -->
+            <div class="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/80">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-900 text-slate-400 border-b border-slate-800 uppercase tracking-wider font-bold text-[10px]">
+                        <tr>
+                            <th class="p-3">Period</th>
+                            <th class="p-3 text-blue-400">Tally</th>
+                            <th class="p-3 text-purple-400">Infinity</th>
+                            <th class="p-3 text-emerald-400 text-right">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="statsTableBody" class="divide-y divide-slate-800/80 font-mono text-slate-200">
+                        <tr>
+                            <td colspan="4" class="p-6 text-center text-slate-500 italic">No click statistics accumulated yet.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Settings Modal Drawer -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-database text-emerald-400"></i>
+                    Supabase Configuration
+                </h3>
+                <button id="btnCloseSettings" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-slate-400 leading-relaxed">
+                Your Supabase credentials are hardcoded into this application. You can inspect or update them below if needed.
+            </p>
+
+            <div class="flex flex-col gap-3">
+                <div>
+                    <label class="text-xs font-bold text-slate-300 mb-1 block">Supabase Project URL</label>
+                    <input type="text" id="inputSupabaseUrl" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-300 mb-1 block">Supabase Anon Public Key</label>
+                    <input type="password" id="inputSupabaseKey" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 font-mono">
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button id="btnSaveSettings" class="flex-grow bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs active-tap shadow-md">
+                    Save Credentials
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const HARDCODED_SUPABASE_URL = 'https://qjafvlgephiccateldrv.supabase.co';
+        const HARDCODED_SUPABASE_KEY = 'sb_publishable_PZNr_pqucNsmdORuDkt7yA_UaxPqnmt';
+
+        let state = {
+            tallyCount: 0,
+            infinityCount: 0,
+            tallyLogs: [],      // Array of { id, timestamp, countAtTime }
+            dailyStats: {},     // { "2026-10-01": { tally: 0, infinity: 0 } }
+            monthlyStats: {},   // { "2026-10": { tally: 0, infinity: 0 } }
+            tallyImage: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=600&q=80',
+            infinityImage: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80'
+        };
+
+        let supabaseClient = null;
+        let currentStatsTab = 'daily';
+
+        const tallyDisplay = document.getElementById('tallyDisplay');
+        const infinityDisplay = document.getElementById('infinityDisplay');
+        const tallyLogContainer = document.getElementById('tallyLogContainer');
+        const statsTableBody = document.getElementById('statsTableBody');
+
+        const btnTallyAdd = document.getElementById('btnTallyAdd');
+        const btnTallyReset = document.getElementById('btnTallyReset');
+        const btnInfinityAdd = document.getElementById('btnInfinityAdd');
+        const btnClearTallyLog = document.getElementById('btnClearTallyLog');
+
+        const tallyCardImage = document.getElementById('tallyCardImage');
+        const infinityCardImage = document.getElementById('infinityCardImage');
+
+        // Image Settings Elements
+        const btnTallyImgSettings = document.getElementById('btnTallyImgSettings');
+        const tallyImgDrawer = document.getElementById('tallyImgDrawer');
+        const btnCloseTallyImgDrawer = document.getElementById('btnCloseTallyImgDrawer');
+        const tallyImgUrlInput = document.getElementById('tallyImgUrlInput');
+        const btnApplyTallyImgUrl = document.getElementById('btnApplyTallyImgUrl');
+        const tallyImgFileInput = document.getElementById('tallyImgFileInput');
+
+        const btnInfinityImgSettings = document.getElementById('btnInfinityImgSettings');
+        const infinityImgDrawer = document.getElementById('infinityImgDrawer');
+        const btnCloseInfinityImgDrawer = document.getElementById('btnCloseInfinityImgDrawer');
+        const infinityImgUrlInput = document.getElementById('infinityImgUrlInput');
+        const btnApplyInfinityImgUrl = document.getElementById('btnApplyInfinityImgUrl');
+        const infinityImgFileInput = document.getElementById('infinityImgFileInput');
+
+        // Tabs
+        const btnTabDaily = document.getElementById('btnTabDaily');
+        const btnTabMonthly = document.getElementById('btnTabMonthly');
+
+        // Settings / Modal
+        const statusBadge = document.getElementById('statusBadge');
+        const statusText = document.getElementById('statusText');
+        const btnOpenSettings = document.getElementById('btnOpenSettings');
+        const btnCloseSettings = document.getElementById('btnCloseSettings');
+        const settingsModal = document.getElementById('settingsModal');
+        const inputSupabaseUrl = document.getElementById('inputSupabaseUrl');
+        const inputSupabaseKey = document.getElementById('inputSupabaseKey');
+        const btnSaveSettings = document.getElementById('btnSaveSettings');
+
+        function initStorage() {
+            const savedUrl = localStorage.getItem('supabase_url') || HARDCODED_SUPABASE_URL;
+            const savedKey = localStorage.getItem('supabase_key') || HARDCODED_SUPABASE_KEY;
+
+            inputSupabaseUrl.value = savedUrl;
+            inputSupabaseKey.value = savedKey;
+
+            if (savedUrl && savedKey && window.supabase) {
+                try {
+                    supabaseClient = window.supabase.createClient(savedUrl, savedKey);
+                    updateStatusBadge(true);
+                    loadFromSupabase();
+                    return;
+                } catch (e) {
+                    console.warn("Supabase initialization fallback to Local Storage", e);
+                }
+            }
+
+            updateStatusBadge(false);
+            loadFromLocalStorage();
+        }
+
+        function updateStatusBadge(isCloud) {
+            if (isCloud) {
+                statusBadge.className = "flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                statusText.textContent = "Supabase Active";
+            } else {
+                statusBadge.className = "flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20";
+                statusText.textContent = "Local Storage";
+            }
+        }
+
+        function loadFromLocalStorage() {
+            state.tallyCount = parseInt(localStorage.getItem('cs_tally_count') || '0', 10);
+            state.infinityCount = parseInt(localStorage.getItem('cs_infinity_count') || '0', 10);
+            state.tallyLogs = JSON.parse(localStorage.getItem('cs_tally_logs') || '[]');
+            state.dailyStats = JSON.parse(localStorage.getItem('cs_daily_stats') || '{}');
+            state.monthlyStats = JSON.parse(localStorage.getItem('cs_monthly_stats') || '{}');
+            state.tallyImage = localStorage.getItem('cs_tally_img') || state.tallyImage;
+            state.infinityImage = localStorage.getItem('cs_infinity_img') || state.infinityImage;
+            renderAll();
+        }
+
+        function saveToLocalStorage() {
+            localStorage.setItem('cs_tally_count', state.tallyCount.toString());
+            localStorage.setItem('cs_infinity_count', state.infinityCount.toString());
+            localStorage.setItem('cs_tally_logs', JSON.stringify(state.tallyLogs));
+            localStorage.setItem('cs_daily_stats', JSON.stringify(state.dailyStats));
+            localStorage.setItem('cs_monthly_stats', JSON.stringify(state.monthlyStats));
+            localStorage.setItem('cs_tally_img', state.tallyImage);
+            localStorage.setItem('cs_infinity_img', state.infinityImage);
+        }
+
+        async function loadFromSupabase() {
+            loadFromLocalStorage(); // Always load local first for instant responsive UI
+
+            if (!supabaseClient) return;
+            try {
+                // Fetch State Record if counter_state table exists
+                const { data: dbState } = await supabaseClient.from('counter_state').select('*').single();
+                if (dbState) {
+                    state.tallyCount = dbState.tally_count ?? state.tallyCount;
+                    state.infinityCount = dbState.infinity_count ?? state.infinityCount;
+                    state.dailyStats = dbState.daily_stats || state.dailyStats;
+                    state.monthlyStats = dbState.monthly_stats || state.monthlyStats;
+                    state.tallyImage = dbState.tally_image || state.tallyImage;
+                    state.infinityImage = dbState.infinity_image || state.infinityImage;
+                }
+
+                // Fetch Tally Logs if table exists
+                const { data: tLogs } = await supabaseClient.from('tally_logs').select('*').order('timestamp', { ascending: false }).limit(100);
+                if (tLogs && tLogs.length > 0) state.tallyLogs = tLogs;
+
+                renderAll();
+            } catch (err) {
+                console.warn("Supabase load error, using cached storage", err);
+            }
+        }
+
+        async function syncToSupabase(logPayload = null) {
+            if (!supabaseClient) return;
+            try {
+                // Insert individual click log to counter_logs table if configured
+                if (logPayload) {
+                    await supabaseClient.from('counter_logs').insert([logPayload]);
+                }
+
+                // Upsert aggregate state
+                await supabaseClient.from('counter_state').upsert([{
+                    id: 1,
+                    tally_count: state.tallyCount,
+                    infinity_count: state.infinityCount,
+                    daily_stats: state.dailyStats,
+                    monthly_stats: state.monthlyStats,
+                    tally_image: state.tallyImage,
+                    infinity_image: state.infinityImage
+                }]);
+            } catch (e) {
+                console.warn("Supabase background sync notice", e);
+            }
+        }
+
+        function formatTimestampWithMs(timestamp) {
+            const d = new Date(timestamp);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            const seconds = String(d.getSeconds()).padStart(2, '0');
+            const ms = String(d.getMilliseconds()).padStart(3, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${ms}`;
+        }
+
+        function renderAll() {
+            tallyDisplay.textContent = state.tallyCount;
+            infinityDisplay.textContent = state.infinityCount;
+            
+            tallyCardImage.src = state.tallyImage;
+            infinityCardImage.src = state.infinityImage;
+
+            renderTallyLogs();
+            renderStatsTable();
+        }
+
+        function renderTallyLogs() {
+            tallyLogContainer.innerHTML = '';
+            if (!state.tallyLogs || state.tallyLogs.length === 0) {
+                tallyLogContainer.innerHTML = '<div class="text-slate-500 text-center py-8 italic text-[11px]">No tally records logged yet</div>';
+                return;
+            }
+
+            state.tallyLogs.forEach(log => {
+                const item = document.createElement('div');
+                item.className = 'bg-slate-900 border border-slate-800 p-2 rounded-xl flex items-center justify-between shadow-sm';
+                item.innerHTML = `
+                    <span class="font-bold text-blue-400 bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">#${log.countAtTime}</span>
+                    <span class="text-slate-300 text-[11px]">${formatTimestampWithMs(log.timestamp)}</span>
+                `;
+                tallyLogContainer.appendChild(item);
+            });
+        }
+
+        function renderStatsTable() {
+            statsTableBody.innerHTML = '';
+
+            const sourceData = currentStatsTab === 'daily' ? state.dailyStats : state.monthlyStats;
+            const sortedKeys = Object.keys(sourceData).sort((a, b) => b.localeCompare(a));
+
+            if (sortedKeys.length === 0) {
+                statsTableBody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-500 italic">No click data recorded yet.</td></tr>`;
+                return;
+            }
+
+            sortedKeys.forEach(key => {
+                const tallyVal = sourceData[key].tally || 0;
+                const infinityVal = sourceData[key].infinity || 0;
+                const totalVal = tallyVal + infinityVal;
+
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-slate-900/50 transition-colors';
+                tr.innerHTML = `
+                    <td class="p-3 font-bold text-slate-200">${key}</td>
+                    <td class="p-3 text-blue-400 font-bold">${tallyVal}</td>
+                    <td class="p-3 text-purple-400 font-bold">${infinityVal}</td>
+                    <td class="p-3 text-emerald-400 font-bold text-right">${totalVal}</td>
+                `;
+                statsTableBody.appendChild(tr);
+            });
+        }
+
+        function recordClickStats(type) {
+            const now = new Date();
+            const dayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+            if (!state.dailyStats[dayKey]) {
+                state.dailyStats[dayKey] = { tally: 0, infinity: 0 };
+            }
+            if (!state.monthlyStats[monthKey]) {
+                state.monthlyStats[monthKey] = { tally: 0, infinity: 0 };
+            }
+
+            if (type === 'tally') {
+                state.dailyStats[dayKey].tally++;
+                state.monthlyStats[monthKey].tally++;
+            } else if (type === 'infinity') {
+                state.dailyStats[dayKey].infinity++;
+                state.monthlyStats[monthKey].infinity++;
+            }
+        }
+
+        // Tally Add Button Click
+        btnTallyAdd.addEventListener('click', () => {
+            state.tallyCount++;
+            const timestamp = Date.now();
+            const logEntry = { timestamp, countAtTime: state.tallyCount };
+            
+            state.tallyLogs.unshift(logEntry);
+            recordClickStats('tally');
+
+            saveToLocalStorage();
+            renderAll();
+            syncToSupabase({ type: 'tally', action: 'click', timestamp: new Date(timestamp).toISOString() });
+        });
+
+        // Discreet Red Reset Button
+        btnTallyReset.addEventListener('click', () => {
+            state.tallyCount = 0;
+            saveToLocalStorage();
+            renderAll();
+            syncToSupabase({ type: 'tally', action: 'reset', timestamp: new Date().toISOString() });
+        });
+
+        // Infinity Add Button Click (No visible log rendered, stats recorded)
+        btnInfinityAdd.addEventListener('click', () => {
+            state.infinityCount++;
+            recordClickStats('infinity');
+
+            saveToLocalStorage();
+            renderAll();
+            syncToSupabase({ type: 'infinity', action: 'click', timestamp: new Date().toISOString() });
+        });
+
+        // Clear Log Button: Clears visible log array ONLY, stats remain untouched!
+        btnClearTallyLog.addEventListener('click', () => {
+            state.tallyLogs = [];
+            saveToLocalStorage();
+            renderTallyLogs();
+        });
+
+        // Image controls logic
+        btnTallyImgSettings.addEventListener('click', () => tallyImgDrawer.classList.toggle('hidden'));
+        btnCloseTallyImgDrawer.addEventListener('click', () => tallyImgDrawer.classList.add('hidden'));
+
+        btnApplyTallyImgUrl.addEventListener('click', () => {
+            const url = tallyImgUrlInput.value.trim();
+            if (url) {
+                state.tallyImage = url;
+                saveToLocalStorage();
+                renderAll();
+                syncToSupabase();
+                tallyImgDrawer.classList.add('hidden');
+            }
+        });
+
+        tallyImgFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    state.tallyImage = evt.target.result;
+                    saveToLocalStorage();
+                    renderAll();
+                    syncToSupabase();
+                    tallyImgDrawer.classList.add('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        btnInfinityImgSettings.addEventListener('click', () => infinityImgDrawer.classList.toggle('hidden'));
+        btnCloseInfinityImgDrawer.addEventListener('click', () => infinityImgDrawer.classList.add('hidden'));
+
+        btnApplyInfinityImgUrl.addEventListener('click', () => {
+            const url = infinityImgUrlInput.value.trim();
+            if (url) {
+                state.infinityImage = url;
+                saveToLocalStorage();
+                renderAll();
+                syncToSupabase();
+                infinityImgDrawer.classList.add('hidden');
+            }
+        });
+
+        infinityImgFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    state.infinityImage = evt.target.result;
+                    saveToLocalStorage();
+                    renderAll();
+                    syncToSupabase();
+                    infinityImgDrawer.classList.add('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // View Mode Tabs
+        btnTabDaily.addEventListener('click', () => {
+            currentStatsTab = 'daily';
+            btnTabDaily.className = "px-3 py-1 rounded-lg text-xs font-extrabold transition-all bg-emerald-500 text-slate-950 shadow-sm";
+            btnTabMonthly.className = "px-3 py-1 rounded-lg text-xs font-extrabold text-slate-400 transition-all hover:text-white";
+            renderStatsTable();
+        });
+
+        btnTabMonthly.addEventListener('click', () => {
+            currentStatsTab = 'monthly';
+            btnTabMonthly.className = "px-3 py-1 rounded-lg text-xs font-extrabold transition-all bg-emerald-500 text-slate-950 shadow-sm";
+            btnTabDaily.className = "px-3 py-1 rounded-lg text-xs font-extrabold text-slate-400 transition-all hover:text-white";
+            renderStatsTable();
+        });
+
+        // Settings Modal triggers
+        btnOpenSettings.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+        btnCloseSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
+
+        btnSaveSettings.addEventListener('click', () => {
+            const url = inputSupabaseUrl.value.trim();
+            const key = inputSupabaseKey.value.trim();
+
+            if (url && key) {
+                localStorage.setItem('supabase_url', url);
+                localStorage.setItem('supabase_key', key);
+            }
+            settingsModal.classList.add('hidden');
+            initStorage();
+        });
+
+        initStorage();
+    </script>
+</body>
+</html>
