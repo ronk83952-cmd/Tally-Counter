@@ -81,8 +81,10 @@
 
             <div class="flex items-center gap-2">
                 <div id="statusBadge" class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span id="statusText">Supabase Active</span>
+                    <span id="statusText" class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Connecting...</span>
+                    </span>
                 </div>
                 <button id="btnOpenSettings" class="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 active-tap transition-colors border border-slate-700/60" title="Connection Settings">
                     <i class="fa-solid fa-sliders text-sm"></i>
@@ -222,8 +224,6 @@
                 <i class="fa-solid fa-infinity text-2xl"></i>
                 ADD 1 INFINITY
             </button>
-
-            <!-- Visible log deliberately omitted for Infinity counter -->
         </section>
 
         <!-- SECTION 3: Cumulative Statistics Breakdown (Daily & Monthly) -->
@@ -322,6 +322,8 @@
 
         let supabaseClient = null;
         let currentStatsTab = 'daily';
+        let autoSyncInterval = null;
+        let isSyncing = false;
 
         const tallyDisplay = document.getElementById('tallyDisplay');
         const infinityDisplay = document.getElementById('infinityDisplay');
@@ -365,35 +367,48 @@
         const inputSupabaseKey = document.getElementById('inputSupabaseKey');
         const btnSaveSettings = document.getElementById('btnSaveSettings');
 
-        function initStorage() {
+        async function initStorage() {
             const savedUrl = localStorage.getItem('supabase_url') || HARDCODED_SUPABASE_URL;
             const savedKey = localStorage.getItem('supabase_key') || HARDCODED_SUPABASE_KEY;
 
             inputSupabaseUrl.value = savedUrl;
             inputSupabaseKey.value = savedKey;
 
+            // Load local storage first for instant render
+            loadFromLocalStorage();
+
             if (savedUrl && savedKey && window.supabase) {
                 try {
                     supabaseClient = window.supabase.createClient(savedUrl, savedKey);
-                    updateStatusBadge(true);
-                    loadFromSupabase();
+                    updateStatusBadge('Syncing Cloud...', 'emerald');
+                    
+                    // Fetch existing global state from Supabase so new devices don't start from 0!
+                    await loadFromSupabase();
+
+                    // Start automatic 5-second bidirectional syncing loop
+                    startAutoSync();
                     return;
                 } catch (e) {
                     console.warn("Supabase initialization fallback to Local Storage", e);
                 }
             }
 
-            updateStatusBadge(false);
-            loadFromLocalStorage();
+            updateStatusBadge('Local Storage', 'amber');
         }
 
-        function updateStatusBadge(isCloud) {
-            if (isCloud) {
+        function startAutoSync() {
+            if (autoSyncInterval) clearInterval(autoSyncInterval);
+            // Run sync every 5 seconds
+            autoSyncInterval = setInterval(syncAndFetchFromSupabase, 5000);
+        }
+
+        function updateStatusBadge(text, type = 'emerald') {
+            if (type === 'emerald') {
                 statusBadge.className = "flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-                statusText.textContent = "Supabase Active";
+                statusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span><span>${text}</span>`;
             } else {
                 statusBadge.className = "flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20";
-                statusText.textContent = "Local Storage";
+                statusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span><span>${text}</span>`;
             }
         }
 
@@ -419,40 +434,186 @@
         }
 
         async function loadFromSupabase() {
-            loadFromLocalStorage(); // Always load local first for instant responsive UI
-
             if (!supabaseClient) return;
             try {
-                // Fetch State Record if counter_state table exists
-                const { data: dbState } = await supabaseClient.from('counter_state').select('*').single();
+                // Fetch current cloud state from counter_state table (id = 1)
+                const { data: dbState, error } = await supabaseClient
+                    .from('counter_state')
+                    .select('*')
+                    .eq('id', 1)
+                    .maybeSingle();
+
                 if (dbState) {
+                    // Update state with cloud data so new devices match existing counter value!
                     state.tallyCount = dbState.tally_count ?? state.tallyCount;
                     state.infinityCount = dbState.infinity_count ?? state.infinityCount;
-                    state.dailyStats = dbState.daily_stats || state.dailyStats;
-                    state.monthlyStats = dbState.monthly_stats || state.monthlyStats;
-                    state.tallyImage = dbState.tally_image || state.tallyImage;
-                    state.infinityImage = dbState.infinity_image || state.infinityImage;
+                    if (dbState.daily_stats) state.dailyStats = dbState.daily_stats;
+                    if (dbState.monthly_stats) state.monthlyStats = dbState.monthly_stats;
+                    if (dbState.tally_image) state.tallyImage = dbState.tally_image;
+                    if (dbState.infinity_image) state.infinityImage = dbState.infinity_image;
+
+                    saveToLocalStorage();
+                } else if (!error) {
+                    // First time initialization in Supabase: push current local state to create id=1
+                    await syncToSupabase();
                 }
 
-                // Fetch Tally Logs if table exists
-                const { data: tLogs } = await supabaseClient.from('tally_logs').select('*').order('timestamp', { ascending: false }).limit(100);
-                if (tLogs && tLogs.length > 0) state.tallyLogs = tLogs;
+                // Fetch logs from Supabase tally_logs table if existing
+                await fetchLogsFromSupabase();
 
+                updateStatusBadge('Supabase Live (5s Sync)', 'emerald');
                 renderAll();
             } catch (err) {
-                console.warn("Supabase load error, using cached storage", err);
+                console.warn("Supabase load error, using cached local storage", err);
+                updateStatusBadge('Local Storage', 'amber');
+            }
+        }
+
+        async function fetchLogsFromSupabase() {
+            if (!supabaseClient) return;
+            try {
+                const { data: tLogs, error } = await supabaseClient
+                    .from('tally_logs')
+                    .select('*')
+                    .order('timestamp', { ascending: false })
+                    .limit(100);
+
+                if (!error && tLogs && tLogs.length > 0) {
+                    state.tallyLogs = tLogs.map(log => ({
+                        timestamp: typeof log.timestamp === 'number' ? log.timestamp : new Date(log.timestamp).getTime(),
+                        countAtTime: log.count_at_time ?? log.countAtTime ?? 0
+                    }));
+                    saveToLocalStorage();
+                }
+            } catch (e) {
+                console.warn("Log fetch notice", e);
+            }
+        }
+
+        /* 5-Second Automatic Bidirectional Sync Function */
+        async function syncAndFetchFromSupabase() {
+            if (!supabaseClient || isSyncing) return;
+            isSyncing = true;
+
+            try {
+                // Fetch latest global counter state
+                const { data: dbState, error } = await supabaseClient
+                    .from('counter_state')
+                    .select('*')
+                    .eq('id', 1)
+                    .maybeSingle();
+
+                if (!error && dbState) {
+                    let hasChanges = false;
+
+                    // Sync tally count (prioritize higher counter if updated on another device)
+                    if (dbState.tally_count !== undefined && dbState.tally_count !== state.tallyCount) {
+                        state.tallyCount = Math.max(state.tallyCount, dbState.tally_count);
+                        hasChanges = true;
+                    }
+
+                    // Sync infinity count
+                    if (dbState.infinity_count !== undefined && dbState.infinity_count !== state.infinityCount) {
+                        state.infinityCount = Math.max(state.infinityCount, dbState.infinity_count);
+                        hasChanges = true;
+                    }
+
+                    // Merge daily statistics across devices
+                    if (dbState.daily_stats) {
+                        for (const dayKey in dbState.daily_stats) {
+                            if (!state.dailyStats[dayKey]) {
+                                state.dailyStats[dayKey] = dbState.daily_stats[dayKey];
+                                hasChanges = true;
+                            } else {
+                                const localD = state.dailyStats[dayKey];
+                                const remoteD = dbState.daily_stats[dayKey];
+                                if ((remoteD.tally || 0) > (localD.tally || 0) || (remoteD.infinity || 0) > (localD.infinity || 0)) {
+                                    state.dailyStats[dayKey] = {
+                                        tally: Math.max(localD.tally || 0, remoteD.tally || 0),
+                                        infinity: Math.max(localD.infinity || 0, remoteD.infinity || 0)
+                                    };
+                                    hasChanges = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // Merge monthly statistics across devices
+                    if (dbState.monthly_stats) {
+                        for (const monthKey in dbState.monthly_stats) {
+                            if (!state.monthlyStats[monthKey]) {
+                                state.monthlyStats[monthKey] = dbState.monthly_stats[monthKey];
+                                hasChanges = true;
+                            } else {
+                                const localM = state.monthlyStats[monthKey];
+                                const remoteM = dbState.monthly_stats[monthKey];
+                                if ((remoteM.tally || 0) > (localM.tally || 0) || (remoteM.infinity || 0) > (localM.infinity || 0)) {
+                                    state.monthlyStats[monthKey] = {
+                                        tally: Math.max(localM.tally || 0, remoteM.tally || 0),
+                                        infinity: Math.max(localM.infinity || 0, remoteM.infinity || 0)
+                                    };
+                                    hasChanges = true;
+                                }
+                            }
+                        }
+                    }
+
+                    // Sync image URLs if updated on another device
+                    if (dbState.tally_image && dbState.tally_image !== state.tallyImage) {
+                        state.tallyImage = dbState.tally_image;
+                        hasChanges = true;
+                    }
+                    if (dbState.infinity_image && dbState.infinity_image !== state.infinityImage) {
+                        state.infinityImage = dbState.infinity_image;
+                        hasChanges = true;
+                    }
+
+                    // Upsert combined highest state back to Supabase
+                    await supabaseClient.from('counter_state').upsert([{
+                        id: 1,
+                        tally_count: state.tallyCount,
+                        infinity_count: state.infinityCount,
+                        daily_stats: state.dailyStats,
+                        monthly_stats: state.monthlyStats,
+                        tally_image: state.tallyImage,
+                        infinity_image: state.infinityImage
+                    }]);
+
+                    // Refresh log history from cloud
+                    await fetchLogsFromSupabase();
+
+                    if (hasChanges) {
+                        saveToLocalStorage();
+                        renderAll();
+                    }
+
+                    updateStatusBadge('Supabase Live (5s Sync)', 'emerald');
+                } else if (!dbState && !error) {
+                    await syncToSupabase();
+                }
+            } catch (err) {
+                console.warn("5-second auto-sync background check notice:", err);
+                updateStatusBadge('Sync Offline', 'amber');
+            } finally {
+                isSyncing = false;
             }
         }
 
         async function syncToSupabase(logPayload = null) {
             if (!supabaseClient) return;
             try {
-                // Insert individual click log to counter_logs table if configured
+                // If a click event payload is provided, insert log into tally_logs and counter_logs
                 if (logPayload) {
-                    await supabaseClient.from('counter_logs').insert([logPayload]);
+                    await supabaseClient.from('tally_logs').insert([{
+                        count_at_time: logPayload.countAtTime || state.tallyCount,
+                        timestamp: logPayload.timestamp || new Date().toISOString(),
+                        type: logPayload.type || 'tally'
+                    }]).catch(() => {});
+
+                    await supabaseClient.from('counter_logs').insert([logPayload]).catch(() => {});
                 }
 
-                // Upsert aggregate state
+                // Upsert current unified state into counter_state table
                 await supabaseClient.from('counter_state').upsert([{
                     id: 1,
                     tally_count: state.tallyCount,
@@ -462,8 +623,10 @@
                     tally_image: state.tallyImage,
                     infinity_image: state.infinityImage
                 }]);
+
+                updateStatusBadge('Supabase Live (5s Sync)', 'emerald');
             } catch (e) {
-                console.warn("Supabase background sync notice", e);
+                console.warn("Supabase update notice", e);
             }
         }
 
@@ -557,7 +720,7 @@
             }
         }
 
-        // Tally Add Button Click
+        // Tally Add Button Click - Local instant update & immediate push
         btnTallyAdd.addEventListener('click', () => {
             state.tallyCount++;
             const timestamp = Date.now();
@@ -568,7 +731,14 @@
 
             saveToLocalStorage();
             renderAll();
-            syncToSupabase({ type: 'tally', action: 'click', timestamp: new Date(timestamp).toISOString() });
+
+            // Instant sync to Supabase
+            syncToSupabase({
+                type: 'tally',
+                action: 'click',
+                countAtTime: state.tallyCount,
+                timestamp: new Date(timestamp).toISOString()
+            });
         });
 
         // Discreet Red Reset Button
@@ -576,7 +746,12 @@
             state.tallyCount = 0;
             saveToLocalStorage();
             renderAll();
-            syncToSupabase({ type: 'tally', action: 'reset', timestamp: new Date().toISOString() });
+            syncToSupabase({
+                type: 'tally',
+                action: 'reset',
+                countAtTime: 0,
+                timestamp: new Date().toISOString()
+            });
         });
 
         // Infinity Add Button Click (No visible log rendered, stats recorded)
@@ -586,7 +761,14 @@
 
             saveToLocalStorage();
             renderAll();
-            syncToSupabase({ type: 'infinity', action: 'click', timestamp: new Date().toISOString() });
+
+            // Instant sync to Supabase
+            syncToSupabase({
+                type: 'infinity',
+                action: 'click',
+                countAtTime: state.infinityCount,
+                timestamp: new Date().toISOString()
+            });
         });
 
         // Clear Log Button: Clears visible log array ONLY, stats remain untouched!
@@ -686,6 +868,7 @@
             initStorage();
         });
 
+        // Start storage and sync setup
         initStorage();
     </script>
 </body>
