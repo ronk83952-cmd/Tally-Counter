@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Counter Suite - Mobile Dashboard</title>
+    <title>Counter Suite</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -75,7 +75,7 @@
                 </div>
                 <div>
                     <h1 class="text-lg font-black text-white tracking-tight leading-none">Counter Suite</h1>
-                    <p class="text-[11px] text-slate-400 font-medium mt-1">Android Mobile Dashboard</p>
+                    <p class="text-[11px] text-slate-400 font-medium mt-1">Dashboard</p>
                 </div>
             </div>
 
@@ -134,7 +134,7 @@
 
             <!-- Tally Display Number -->
             <div class="bg-slate-950/90 rounded-2xl p-4 text-center border border-slate-800/90 shadow-inner flex flex-col items-center justify-center">
-                <span class="text-[10px] uppercase font-extrabold tracking-widest text-slate-500 mb-1">Current Tally</span>
+                <span class="text-[10px] uppercase font-extrabold tracking-widest text-slate-500 mb-1"> </span>
                 <span id="tallyDisplay" class="text-6xl font-black text-blue-400 tabular-nums tracking-tight drop-shadow-sm">0</span>
             </div>
 
@@ -142,12 +142,12 @@
             <div class="flex flex-col gap-2.5">
                 <button id="btnTallyAdd" class="w-full bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active-tap text-white font-black text-2xl py-5 rounded-2xl shadow-lg shadow-blue-900/50 border border-blue-400/30 tracking-wide flex items-center justify-center gap-3">
                     <i class="fa-solid fa-plus text-xl"></i>
-                    ADD +1
+                    RADHA
                 </button>
 
                 <!-- Small, discreet, hard-to-click-by-mistake Red Reset Button -->
                 <div class="flex justify-center pt-0.5">
-                    <button id="btnTallyReset" class="bg-red-700/80 hover:bg-red-600 active:scale-90 text-[10px] uppercase tracking-wider font-extrabold text-white px-3.5 py-1 rounded-full border border-red-500/40 opacity-75 hover:opacity-100 transition-all shadow-sm flex items-center gap-1.5" title="Reset Tally Counter">
+                    <button id="btnTallyReset" class="bg-red-700/80 hover:bg-red-600 active:scale-80 text-[10px] uppercase tracking-wider font-extrabold text-white px-3.5 py-1 rounded-full border border-red-500/40 opacity-75 hover:opacity-100 transition-all shadow-sm flex items-center gap-1.1" title="Reset Tally Counter">
                         <i class="fa-solid fa-rotate-right text-[9px]"></i> Reset
                     </button>
                 </div>
@@ -158,7 +158,7 @@
                 <div class="flex items-center justify-between mb-2.5">
                     <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                         <i class="fa-solid fa-clock text-blue-400"></i>
-                        Activity Log <span class="text-[10px] text-slate-500 lowercase">(ms accuracy)</span>
+                        Activity Log <span class="text-[10px] text-slate-500 lowercase"> </span>
                     </h3>
                     
                     <!-- Clear Log Button: Clears VISIBLE LOG ONLY -->
@@ -215,14 +215,14 @@
 
             <!-- Infinity Display Number -->
             <div class="bg-slate-950/90 rounded-2xl p-4 text-center border border-slate-800/90 shadow-inner flex flex-col items-center justify-center">
-                <span class="text-[10px] uppercase font-extrabold tracking-widest text-slate-500 mb-1">Continuous Infinity Total</span>
+                <span class="text-[10px] uppercase font-extrabold tracking-widest text-slate-500 mb-1"> </span>
                 <span id="infinityDisplay" class="text-6xl font-black text-purple-400 tabular-nums tracking-tight drop-shadow-sm">0</span>
             </div>
 
             <!-- Primary Action Button (Long, Wide) -->
             <button id="btnInfinityAdd" class="w-full bg-gradient-to-r from-purple-600 via-purple-500 to-pink-600 hover:from-purple-500 hover:to-pink-500 active-tap text-white font-black text-2xl py-5 rounded-2xl shadow-lg shadow-purple-900/50 border border-purple-400/30 tracking-wide flex items-center justify-center gap-3">
                 <i class="fa-solid fa-infinity text-2xl"></i>
-                ADD 1 INFINITY
+                
             </button>
         </section>
 
