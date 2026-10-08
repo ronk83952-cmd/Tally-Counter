@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimized Tally Counter</title>
+    <!-- Load Supabase v2 -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            padding: 20px; 
+            max-width: 600px; 
+            margin: auto; 
+            background: #f4f4f9;
+        }
+        .header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 20px; 
+        }
+        .status { 
+            padding: 5px 10px; 
+            border-radius: 5px; 
+            font-weight: bold; 
+            font-size: 14px;
+        }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.disconnected { background: #f8d7da; color: #721c24; }
+        .stats-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 15px; 
+            margin-bottom: 20px; 
+        }
+        .stat-box { 
+            background: white;
+            padding: 20px; 
+            border: 1px solid #ccc; 
+            border-radius: 8px; 
+            text-align: center; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .stat-box h2 { margin: 0 0 10px 0; font-size: 18px; color: #333; }
+        .number-display { font-size: 32px; font-weight: bold; color: #007bff; margin-bottom: 10px; }
+        .btn { 
+            padding: 10px 20px; 
+            font-size: 16px; 
+            cursor: pointer; 
+            border: none; 
+            border-radius: 5px; 
+            background: #007bff; 
+            color: white; 
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #0056b3; }
+        .btn-secondary { background: #6c757d; }
+        .btn-secondary:hover { background: #5a6268; }
+        .image-container { text-align: center; margin-top: 20px; }
+        .image-container img { max-width: 100%; border-radius: 8px; display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>Tally Tracker</h1>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span id="connection-status" class="status connected">Connected</span>
+            <button id="toggle-connection" class="btn btn-secondary">Disconnect</button>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-box">
+            <h2>Tally Count</h2>
+            <div id="tally-count" class="number-display">0</div>
+            <button class="btn" onclick="increment('tally_count')">+1 Tally</button>
+        </div>
+        <div class="stat-box">
+            <h2>Infinity Count</h2>
+            <div id="infinity-count" class="number-display">0</div>
+            <button class="btn" onclick="increment('infinity_count')">+1 Infinity</button>
+        </div>
+        <div class="stat-box">
+            <h2>Daily Stats</h2>
+            <div id="daily-stats" class="number-display">0</div>
+        </div>
+        <div class="stat-box">
+            <h2>Monthly Stats</h2>
+            <div id="monthly-stats" class="number-display">0</div>
+        </div>
+    </div>
+
+    <div class="image-container">
+        <p style="color: #666; font-size: 14px;">Heavy Assets (Loaded once on startup)</p>
+        <img id="db-image" src="" alt="Database Image">
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. SUPABASE CONFIGURATION
+        // ==========================================
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; 
+        const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY'; 
+        const TABLE_NAME = 'tally_data'; 
+        const RECORD_ID = 1; // Assuming you are targeting row ID 1
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // ==========================================
+        // 2. STATE & VARIABLES
+        // ==========================================
+        let isConnected = false;
+        let syncInterval = null;
+        let inactivityTimeout = null;
+        const SYNC_INTERVAL_MS = 5000; // 5 seconds
+        const INACTIVITY_LIMIT_MS = 10 * 60 * 1000; // 10 minutes
+
+        const ui = {
+            tally: document.getElementById('tally-count'),
+            infinity: document.getElementById('infinity-count'),
+            daily: document.getElementById('daily-stats'),
+            monthly: document.getElementById('monthly-stats'),
+            image: document.getElementById('db-image'),
+            statusText: document.getElementById('connection-status'),
+            toggleBtn: document.getElementById('toggle-connection')
+        };
+
+        // ==========================================
+        // 3. DATA FETCHING LOGIC
+        // ==========================================
+        
+        // Heavy load on startup (Fetches * to get Base64 images)
+        async function fetchInitialData() {
+            if (SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
+            
+            const { data, error } = await supabase
+                .from(TABLE_NAME)
+                .select('*')
+                .eq('id', RECORD_ID)
+                .single();
+
+            if (data && !error) {
+                updateUI(data);
+                // Load heavy image only once
+                if (data.image_base64) {
+                    ui.image.src = data.image_base64;
+                    ui.image.style.display = 'inline-block';
+                }
+            }
+        }
+
+        // Lightweight payload (Only fetches 4 number columns - saves massive egress)
+        async function fetchLightweightData() {
+            if (!isConnected || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
+
+            const { data, error } = await supabase
+                .from(TABLE_NAME)
+                .select('tally_count, infinity_count, daily_stats, monthly_stats')
+                .eq('id', RECORD_ID)
+                .single();
+
+            if (data && !error) {
+                updateUI(data);
+            }
+        }
+
+        function updateUI(data) {
+            if (data.tally_count !== undefined) ui.tally.innerText = data.tally_count;
+            if (data.infinity_count !== undefined) ui.infinity.innerText = data.infinity_count;
+            if (data.daily_stats !== undefined) ui.daily.innerText = data.daily_stats;
+            if (data.monthly_stats !== undefined) ui.monthly.innerText = data.monthly_stats;
+        }
+
+        // ==========================================
+        // 4. CONNECTION & SYNC MANAGEMENT
+        // ==========================================
+        
+        function startSync() {
+            isConnected = true;
+            ui.statusText.innerText = 'Connected';
+            ui.statusText.className = 'status connected';
+            ui.toggleBtn.innerText = 'Disconnect';
+            
+            fetchLightweightData(); // Immediate fetch
+            if (!syncInterval) {
+                syncInterval = setInterval(fetchLightweightData, SYNC_INTERVAL_MS);
+            }
+            resetInactivityTimer();
+        }
+
+        function stopSync() {
+            isConnected = false;
+            ui.statusText.innerText = 'Disconnected';
+            ui.statusText.className = 'status disconnected';
+            ui.toggleBtn.innerText = 'Connect';
+            
+            if (syncInterval) {
+                clearInterval(syncInterval);
+                syncInterval = null;
+            }
+            if (inactivityTimeout) {
+                clearTimeout(inactivityTimeout);
+            }
+        }
+
+        function toggleConnection() {
+            isConnected ? stopSync() : startSync();
+        }
+
+        // ==========================================
+        // 5. AUTO-DISCONNECT (INACTIVITY TIMER)
+        // ==========================================
+        
+        function resetInactivityTimer() {
+            if (!isConnected) return; // Don't trigger if manually paused
+            
+            if (inactivityTimeout) clearTimeout(inactivityTimeout);
+            
+            inactivityTimeout = setTimeout(() => {
+                console.log("Auto-disconnecting due to 10 minutes of inactivity.");
+                stopSync();
+            }, INACTIVITY_LIMIT_MS);
+        }
+
+        // Listen for ANY user interaction to keep the connection alive
+        ['click', 'touchstart', 'mousemove', 'keydown'].forEach(evt => 
+            window.addEventListener(evt, () => {
+                if (isConnected) resetInactivityTimer();
+            })
+        );
+
+        // ==========================================
+        // 6. INCREMENT LOGIC
+        // ==========================================
+        
+        async function increment(column) {
+            // Wake up connection immediately if they click while disconnected
+            if (!isConnected) startSync();
+            else resetInactivityTimer();
+
+            // Optimistic UI update (feels instant to the user)
+            const targetElement = document.getElementById(column.replace('_', '-'));
+            const currentVal = parseInt(targetElement.innerText);
+            targetElement.innerText = currentVal + 1;
+
+            if (SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
+
+            // Direct update to Supabase
+            // Note: For production with multiple users clicking at the exact same time, 
+            // replacing this with an RPC call like .rpc('increment', { col: column }) is better.
+            const updates = {};
+            updates[column] = currentVal + 1;
+            
+            await supabase
+                .from(TABLE_NAME)
+                .update(updates)
+                .eq('id', RECORD_ID);
+        }
+
+        // ==========================================
+        // 7. INIT
+        // ==========================================
+        ui.toggleBtn.addEventListener('click', toggleConnection);
+        
+        // Fetch heavy data once, then begin lightweight polling
+        fetchInitialData().then(() => startSync());
+
+    </script>
+</body>
+</html>
