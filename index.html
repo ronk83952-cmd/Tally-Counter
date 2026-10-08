@@ -86,10 +86,14 @@
             </div>
 
             <div class="flex items-center gap-2">
-                <div id="statusBadge" class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <!-- Sync Toggle Button -->
+                <button id="btnToggleSync" class="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold active-tap transition-colors border border-blue-500/50 shadow-md">
+                    Connect
+                </button>
+                <div id="statusBadge" class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                     <span id="statusText" class="flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        <span>Connecting...</span>
+                        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <span>Offline</span>
                     </span>
                 </div>
                 <button id="btnOpenSettings" class="p-2.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 active-tap transition-colors border border-slate-700/60" title="Connection Settings">
@@ -329,6 +333,7 @@
         let currentStatsTab = 'daily';
         let autoSyncInterval = null;
         let isSyncing = false;
+        let isSyncEnabled = false; // Prevents connection/egress usage until manually toggled
 
         const tallyDisplay = document.getElementById('tallyDisplay');
         const infinityDisplay = document.getElementById('infinityDisplay');
@@ -362,7 +367,7 @@
         const btnTabDaily = document.getElementById('btnTabDaily');
         const btnTabMonthly = document.getElementById('btnTabMonthly');
 
-        // Settings / Modal
+        // Settings / Modal / Connect
         const statusBadge = document.getElementById('statusBadge');
         const statusText = document.getElementById('statusText');
         const btnOpenSettings = document.getElementById('btnOpenSettings');
@@ -371,6 +376,7 @@
         const inputSupabaseUrl = document.getElementById('inputSupabaseUrl');
         const inputSupabaseKey = document.getElementById('inputSupabaseKey');
         const btnSaveSettings = document.getElementById('btnSaveSettings');
+        const btnToggleSync = document.getElementById('btnToggleSync');
 
         async function initStorage() {
             const savedUrl = localStorage.getItem('supabase_url') || HARDCODED_SUPABASE_URL;
@@ -379,19 +385,16 @@
             inputSupabaseUrl.value = savedUrl;
             inputSupabaseKey.value = savedKey;
 
-            // Load local storage first for instant render
+            // Load local storage first for instant render[cite: 1]
             loadFromLocalStorage();
 
             if (savedUrl && savedKey && window.supabase) {
                 try {
                     supabaseClient = window.supabase.createClient(savedUrl, savedKey);
-                    updateStatusBadge('Syncing Cloud...', 'emerald');
+                    updateStatusBadge('Ready to Connect', 'amber');
                     
-                    // Fetch existing global state from Supabase so new devices don't start from 0!
-                    await loadFromSupabase();
-
-                    // Start automatic 5-second bidirectional syncing loop
-                    startAutoSync();
+                    // Supabase auto-sync functions removed here to prevent auto-starting.
+                    // Wait for the user to explicitly hit "Connect" to respect egress.
                     return;
                 } catch (e) {
                     console.warn("Supabase initialization fallback to Local Storage", e);
@@ -403,7 +406,7 @@
 
         function startAutoSync() {
             if (autoSyncInterval) clearInterval(autoSyncInterval);
-            // Run sync every 5 seconds
+            // Run sync every 5 seconds[cite: 1]
             autoSyncInterval = setInterval(syncAndFetchFromSupabase, 5000);
         }
 
@@ -439,9 +442,9 @@
         }
 
         async function loadFromSupabase() {
-            if (!supabaseClient) return;
+            if (!supabaseClient || !isSyncEnabled) return;
             try {
-                // Fetch current cloud state from counter_state table (id = 1)
+                // Fetch current cloud state from counter_state table (id = 1)[cite: 1]
                 const { data: dbState, error } = await supabaseClient
                     .from('counter_state')
                     .select('*')
@@ -449,7 +452,7 @@
                     .maybeSingle();
 
                 if (dbState) {
-                    // Update state with cloud data so new devices match existing counter value!
+                    // Update state with cloud data so new devices match existing counter value![cite: 1]
                     state.tallyCount = dbState.tally_count ?? state.tallyCount;
                     state.infinityCount = dbState.infinity_count ?? state.infinityCount;
                     if (dbState.daily_stats) state.dailyStats = dbState.daily_stats;
@@ -459,11 +462,11 @@
 
                     saveToLocalStorage();
                 } else if (!error) {
-                    // First time initialization in Supabase: push current local state to create id=1
+                    // First time initialization in Supabase: push current local state to create id=1[cite: 1]
                     await syncToSupabase();
                 }
 
-                // Fetch logs from Supabase tally_logs table if existing
+                // Fetch logs from Supabase tally_logs table if existing[cite: 1]
                 await fetchLogsFromSupabase();
 
                 updateStatusBadge('Supabase Live (5s Sync)', 'emerald');
@@ -497,11 +500,11 @@
 
         /* 5-Second Automatic Bidirectional Sync Function */
         async function syncAndFetchFromSupabase() {
-            if (!supabaseClient || isSyncing) return;
+            if (!supabaseClient || !isSyncEnabled || isSyncing) return;
             isSyncing = true;
 
             try {
-                // Fetch latest global counter state
+                // Fetch latest global counter state[cite: 1]
                 const { data: dbState, error } = await supabaseClient
                     .from('counter_state')
                     .select('*')
@@ -511,19 +514,19 @@
                 if (!error && dbState) {
                     let hasChanges = false;
 
-                    // Sync tally count (prioritize higher counter if updated on another device)
+                    // Sync tally count (prioritize higher counter if updated on another device)[cite: 1]
                     if (dbState.tally_count !== undefined && dbState.tally_count !== state.tallyCount) {
                         state.tallyCount = Math.max(state.tallyCount, dbState.tally_count);
                         hasChanges = true;
                     }
 
-                    // Sync infinity count
+                    // Sync infinity count[cite: 1]
                     if (dbState.infinity_count !== undefined && dbState.infinity_count !== state.infinityCount) {
                         state.infinityCount = Math.max(state.infinityCount, dbState.infinity_count);
                         hasChanges = true;
                     }
 
-                    // Merge daily statistics across devices
+                    // Merge daily statistics across devices[cite: 1]
                     if (dbState.daily_stats) {
                         for (const dayKey in dbState.daily_stats) {
                             if (!state.dailyStats[dayKey]) {
@@ -543,7 +546,7 @@
                         }
                     }
 
-                    // Merge monthly statistics across devices
+                    // Merge monthly statistics across devices[cite: 1]
                     if (dbState.monthly_stats) {
                         for (const monthKey in dbState.monthly_stats) {
                             if (!state.monthlyStats[monthKey]) {
@@ -563,7 +566,7 @@
                         }
                     }
 
-                    // Sync image URLs if updated on another device
+                    // Sync image URLs if updated on another device[cite: 1]
                     if (dbState.tally_image && dbState.tally_image !== state.tallyImage) {
                         state.tallyImage = dbState.tally_image;
                         hasChanges = true;
@@ -573,7 +576,7 @@
                         hasChanges = true;
                     }
 
-                    // Upsert combined highest state back to Supabase
+                    // Upsert combined highest state back to Supabase[cite: 1]
                     await supabaseClient.from('counter_state').upsert([{
                         id: 1,
                         tally_count: state.tallyCount,
@@ -584,7 +587,7 @@
                         infinity_image: state.infinityImage
                     }]);
 
-                    // Refresh log history from cloud
+                    // Refresh log history from cloud[cite: 1]
                     await fetchLogsFromSupabase();
 
                     if (hasChanges) {
@@ -605,9 +608,9 @@
         }
 
         async function syncToSupabase(logPayload = null) {
-            if (!supabaseClient) return;
+            if (!supabaseClient || !isSyncEnabled) return;
             try {
-                // If a click event payload is provided, insert log into tally_logs and counter_logs
+                // If a click event payload is provided, insert log into tally_logs and counter_logs[cite: 1]
                 if (logPayload) {
                     await supabaseClient.from('tally_logs').insert([{
                         count_at_time: logPayload.countAtTime || state.tallyCount,
@@ -618,7 +621,7 @@
                     await supabaseClient.from('counter_logs').insert([logPayload]).catch(() => {});
                 }
 
-                // Upsert current unified state into counter_state table
+                // Upsert current unified state into counter_state table[cite: 1]
                 await supabaseClient.from('counter_state').upsert([{
                     id: 1,
                     tally_count: state.tallyCount,
@@ -725,7 +728,7 @@
             }
         }
 
-        // Tally Add Button Click - Local instant update & immediate push
+        // Tally Add Button Click - Local instant update & immediate push[cite: 1]
         btnTallyAdd.addEventListener('click', () => {
             state.tallyCount++;
             const timestamp = Date.now();
@@ -737,7 +740,7 @@
             saveToLocalStorage();
             renderAll();
 
-            // Instant sync to Supabase
+            // Instant sync to Supabase (only executes if isSyncEnabled is true)
             syncToSupabase({
                 type: 'tally',
                 action: 'click',
@@ -746,7 +749,7 @@
             });
         });
 
-        // Discreet Red Reset Button
+        // Discreet Red Reset Button[cite: 1]
         btnTallyReset.addEventListener('click', () => {
             state.tallyCount = 0;
             saveToLocalStorage();
@@ -759,7 +762,7 @@
             });
         });
 
-        // Infinity Add Button Click (No visible log rendered, stats recorded)
+        // Infinity Add Button Click (No visible log rendered, stats recorded)[cite: 1]
         btnInfinityAdd.addEventListener('click', () => {
             state.infinityCount++;
             recordClickStats('infinity');
@@ -767,7 +770,7 @@
             saveToLocalStorage();
             renderAll();
 
-            // Instant sync to Supabase
+            // Instant sync to Supabase (only executes if isSyncEnabled is true)
             syncToSupabase({
                 type: 'infinity',
                 action: 'click',
@@ -776,14 +779,14 @@
             });
         });
 
-        // Clear Log Button: Clears visible log array ONLY, stats remain untouched!
+        // Clear Log Button: Clears visible log array ONLY, stats remain untouched![cite: 1]
         btnClearTallyLog.addEventListener('click', () => {
             state.tallyLogs = [];
             saveToLocalStorage();
             renderTallyLogs();
         });
 
-        // Image controls logic
+        // Image controls logic[cite: 1]
         btnTallyImgSettings.addEventListener('click', () => tallyImgDrawer.classList.toggle('hidden'));
         btnCloseTallyImgDrawer.addEventListener('click', () => tallyImgDrawer.classList.add('hidden'));
 
@@ -842,7 +845,7 @@
             }
         });
 
-        // View Mode Tabs
+        // View Mode Tabs[cite: 1]
         btnTabDaily.addEventListener('click', () => {
             currentStatsTab = 'daily';
             btnTabDaily.className = "px-3 py-1 rounded-lg text-xs font-extrabold transition-all bg-emerald-500 text-slate-950 shadow-sm";
@@ -857,7 +860,7 @@
             renderStatsTable();
         });
 
-        // Settings Modal triggers
+        // Settings Modal triggers[cite: 1]
         btnOpenSettings.addEventListener('click', () => settingsModal.classList.remove('hidden'));
         btnCloseSettings.addEventListener('click', () => settingsModal.classList.add('hidden'));
 
@@ -873,7 +876,30 @@
             initStorage();
         });
 
-        // Start storage and sync setup
+        // Sync Connection Toggle Logic
+        btnToggleSync.addEventListener('click', async () => {
+            isSyncEnabled = !isSyncEnabled;
+            
+            if (isSyncEnabled) {
+                // Connected State
+                btnToggleSync.textContent = 'Disconnect';
+                btnToggleSync.className = "px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[11px] font-bold active-tap transition-colors border border-red-500/50 shadow-md";
+                updateStatusBadge('Connecting...', 'emerald');
+                
+                if (supabaseClient) {
+                    await syncAndFetchFromSupabase(); // Initial connection merge
+                    startAutoSync();                  // Starts the 5-second interval
+                }
+            } else {
+                // Disconnected State
+                btnToggleSync.textContent = 'Connect';
+                btnToggleSync.className = "px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-bold active-tap transition-colors border border-blue-500/50 shadow-md";
+                if (autoSyncInterval) clearInterval(autoSyncInterval);
+                updateStatusBadge('Sync Paused', 'amber');
+            }
+        });
+
+        // Start storage setup[cite: 1]
         initStorage();
     </script>
 </body>
